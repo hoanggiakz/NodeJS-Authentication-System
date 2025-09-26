@@ -1,15 +1,16 @@
-import express from "express"; // Importing express for the web framework
-import bodyParser from "body-parser"; // Importing bodyParser for parsing request bodies
-import ejsLayouts from "express-ejs-layouts"; // Importing express-ejs-layouts for layout support
-import path from "path"; // Importing express-ejs-layouts for layout support
-import dotenv from "dotenv"; // Importing dotenv to load environment variables
-import session from "express-session"; // Importing express-session for session management
-import passport from "passport"; // Importing passport for authentication
-import { Strategy as GoogleStrategy } from "passport-google-oauth20"; // Importing Google OAuth 2.0 strategy for passport
+const express = require("express"); // Importing express for the web framework
+const bodyParser = require("body-parser"); // Importing bodyParser for parsing request bodies
+const ejsLayouts = require("express-ejs-layouts"); // Importing express-ejs-layouts for layout support
+const path = require("path"); // Importing path for file paths
+const dotenv = require("dotenv"); // Importing dotenv to load environment variables
+const session = require("express-session"); // Importing express-session for session management
+const passport = require("passport"); // Importing passport for authentication
+const GoogleStrategy = require("passport-google-oauth20").Strategy; // Importing Google OAuth 2.0 strategy for passport
+const studentInfo = require('./config/student'); // Import student information
 
-import { connectUsingMongoose } from "./config/mongodb.js"; // Importing MongoDB connection function
-import router from "./routes/routes.js"; // Importing main application routes
-import authrouter from "./routes/authRoutes.js"; // Importing authentication routes
+const { connectUsingMongoose } = require("./config/mongodb.js"); // Importing MongoDB connection function
+const router = require("./routes/routes.js"); // Importing main application routes
+const authrouter = require("./routes/authRoutes.js"); // Importing authentication routes
 
 dotenv.config(); // Loading environment variables from .env file
 const app = express(); // Initializing express application
@@ -17,7 +18,7 @@ const app = express(); // Initializing express application
 //SESSION
 app.use(
   session({
-    secret: "SecretKey",
+    secret: process.env.SESSION_SECRET || "SecretKey",
     resave: false,
     saveUninitialized: true,
     cookie: { secure: false },
@@ -28,6 +29,13 @@ app.use(
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
+// Middleware để pass thông tin sinh viên
+app.use((req, res, next) => {
+    res.locals.studentName = studentInfo.studentName;
+    res.locals.studentId = studentInfo.studentId;
+    next();
+});
+
 //Passport
 app.use(passport.initialize());
 app.use(passport.session());
@@ -37,8 +45,7 @@ passport.use(
     {
       clientID: process.env.CLIENT_ID,
       clientSecret: process.env.CLIENT_SECRET,
-      callbackURL:
-        "https://nodejs-authentication-system-l2pu.onrender.com/auth/google/callback",
+      callbackURL: process.env.CALLBACK_URL || "http://localhost:3000/auth/google/callback",
       scope: ["profile", "email"],
     },
     function (accessToken, refreshToken, profile, callback) {
@@ -58,20 +65,29 @@ passport.deserializeUser((user, done) => {
 // Set Templates
 app.set("view engine", "ejs"); // Define template engine
 app.use(ejsLayouts); // Use base template
-app.set("views", path.join(path.resolve(), "views")); // Define template directory
+app.set("views", path.join(__dirname, "views")); // Define template directory
+
+// Static files
+app.use(express.static("public"));
 
 // DB Connection
 connectUsingMongoose();
 
 //ROUTES
 app.get("/", (req, res) => {
-  res.send("Hey Ninja ! Go to /user/signin for the login page.");
+  res.render("index", { 
+    title: "NodeJS Authentication System",
+    message: "Welcome! Go to /user/signin for the login page."
+  });
 });
+
 app.use("/user", router);
 app.use("/auth", authrouter);
-app.use(express.static("public"));
+
 
 //LISTEN
-app.listen(process.env.PORT, () => {
-  console.log(`Server is running on port ${process.env.PORT}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+  console.log(`Student: ${studentInfo.studentName} - ID: ${studentInfo.studentId}`);
 });

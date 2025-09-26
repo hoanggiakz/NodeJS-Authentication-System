@@ -1,26 +1,39 @@
-import passport from 'passport';  // Importing passport for authentication
-import express from 'express';    // Importing express for the web framework
-import { googleSignInController } from '../controllers/authController.js';  // Importing the Google sign-in controller
-import dotenv from 'dotenv';      // Importing dotenv to load environment variables
+const express = require('express');
+const passport = require('passport');
+const router = express.Router();
 
-dotenv.config();  // Loading environment variables from .env file
-
-const authRouter = express.Router(); // Creating an instance of express Router for handling authentication routes
-const googleSignIn = new googleSignInController(); // Creating an instance of GoogleSignInController
-
-// OAuth2 login with Google
-authRouter.get("/google", passport.authenticate('google', { scope: ['email', 'profile'] }));
-
-// Google OAuth2 callback
-authRouter.get("/google/callback",
-    passport.authenticate("google", {
-        successRedirect: process.env.CLIENT_URL,
-        failureRedirect: "/login/failed"
-    })
+// Google OAuth routes
+router.get('/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
 );
 
-// Routes for handling login success and failure
-authRouter.get("/login/success", googleSignIn.signInSuccess);
-authRouter.get("/login/failed", googleSignIn.signInFailed);
+router.get('/google/callback',
+  passport.authenticate('google', { failureRedirect: '/user/signin' }),
+  (req, res) => {
+    // Successful authentication
+    req.session.user = {
+      id: req.user.id,
+      name: req.user.displayName,
+      email: req.user.emails[0].value,
+      photo: req.user.photos[0].value
+    };
+    res.redirect('/user/dashboard');
+  }
+);
 
-export default authRouter; // Exporting the Auth Router
+// Logout route
+router.get('/logout', (req, res) => {
+  req.logout((err) => {
+    if (err) {
+      console.error('Logout error:', err);
+    }
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destroy error:', err);
+      }
+      res.redirect('/user/signin');
+    });
+  });
+});
+
+module.exports = router;
